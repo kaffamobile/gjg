@@ -6,13 +6,13 @@ CLASS_FILES = $(PACKAGE_DIR)/TestApp.class
 JAR_FILE = testapp.jar
 MAIN_CLASS = testdata.TestApp
 
-# Ensure Java 8 compatibility
-JAVAC_FLAGS = -source 8 -target 8
+# Use modern Java features - compile with current Java version
+JAVAC_FLAGS = -Xlint:deprecation
 
 compile: $(CLASS_FILES)
 
 $(CLASS_FILES): $(JAVA_SRC)
-	@echo "Compiling Java source with Java 8 compatibility..."
+	@echo "Compiling Java source with modern Java features..."
 	@mkdir -p $(PACKAGE_DIR)
 	javac $(JAVAC_FLAGS) -d . $(JAVA_SRC)
 
@@ -34,7 +34,7 @@ clean:
 	@echo "Cleaning up..."
 	rm -rf $(PACKAGE_DIR) $(JAR_FILE) manifest.txt
 
-# Check if we have Java 8
+# Check current Java version
 check-java:
 	@echo "Checking Java version..."
 	@java -version 2>&1 | head -n 1

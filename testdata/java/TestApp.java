@@ -1,27 +1,34 @@
 package testdata;
 
-import java.io.File;
-import java.util.Arrays;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
- * Test application for GJG launcher testing.
- * Compatible with Java 8+ and provides comprehensive testing capabilities.
+ * Modern test application for GJG launcher testing.
+ * Uses modern Java features since we compile at test time.
  */
 public class TestApp {
     public static void main(String[] args) {
-        System.out.println("=== GJG Test Application ===");
+        var timestamp = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_TIME);
+        System.out.println("=== GJG Test Application (" + timestamp + ") ===");
 
-        // Print working directory
-        System.out.println("Working Directory: " + System.getProperty("user.dir"));
+        // Use modern Path API
+        Path workingDir = Paths.get(System.getProperty("user.dir"));
+        System.out.println("Working Directory: " + workingDir.toAbsolutePath());
 
-        // Print JVM arguments that are commonly tested
+        // Print JVM info using modern string methods
         printSystemProperty("java.version");
         printSystemProperty("java.library.path");
         printSystemProperty("user.name");
 
-        // Print command line arguments
-        System.out.println("Command Line Args: " + Arrays.toString(args));
+        // Use String.join for cleaner output
+        var argsList = List.of(args);
+        System.out.println("Command Line Args: [" + String.join(", ", argsList) + "]");
 
         // Print specific environment variables that tests set
         printEnvironmentVariable("MY_HOME");
@@ -29,27 +36,38 @@ public class TestApp {
         printEnvironmentVariable("TEST_ENV");
         printEnvironmentVariable("WORKSPACE");
 
-        // Print all environment variables starting with GJG_ for testing
-        System.out.println("GJG Environment Variables:");
-        for (Map.Entry<String, String> entry : System.getenv().entrySet()) {
-            if (entry.getKey().startsWith("GJG_")) {
-                System.out.println("  " + entry.getKey() + "=" + entry.getValue());
-            }
+        // Use streams for GJG environment variables
+        var gjgEnvVars = System.getenv().entrySet().stream()
+            .filter(entry -> entry.getKey().startsWith("GJG_"))
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+        if (!gjgEnvVars.isEmpty()) {
+            System.out.println("GJG Environment Variables:");
+            gjgEnvVars.forEach((key, value) ->
+                System.out.println("  " + key + "=" + value));
         }
 
-        // Handle special test modes
-        for (String arg : args) {
-            if ("--test-exit-code".equals(arg)) {
-                System.out.println("Test mode: custom exit code");
-                String exitCode = System.getProperty("gjg.test.exitcode", "42");
-                System.exit(Integer.parseInt(exitCode));
-            } else if ("--test-error".equals(arg)) {
-                System.out.println("Test mode: error output");
-                System.err.println("This is test error output");
-            } else if ("--test-long-output".equals(arg)) {
-                System.out.println("Test mode: long output");
-                for (int i = 1; i <= 5; i++) {
-                    System.out.println("Line " + i + ": This is test output line number " + i);
+        // Handle special test modes with enhanced switch
+        for (var arg : args) {
+            switch (arg) {
+                case "--test-exit-code" -> {
+                    System.out.println("Test mode: custom exit code");
+                    var exitCode = System.getProperty("gjg.test.exitcode", "42");
+                    System.exit(Integer.parseInt(exitCode));
+                }
+                case "--test-error" -> {
+                    System.out.println("Test mode: error output");
+                    System.err.println("This is test error output");
+                }
+                case "--test-long-output" -> {
+                    System.out.println("Test mode: long output");
+                    for (int i = 1; i <= 5; i++) {
+                        System.out.println("Line %d: This is test output line number %d".formatted(i, i));
+                    }
+                }
+                case "--test-java-version" -> {
+                    System.out.println("Java Runtime Version: " + Runtime.version());
+                    System.out.println("Available Processors: " + Runtime.getRuntime().availableProcessors());
                 }
             }
         }

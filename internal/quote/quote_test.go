@@ -46,9 +46,13 @@ func TestJoinWindows(t *testing.T) {
 			expected: ``,
 		},
 		{
-			name:     "complex JVM arguments",
-			input:    []string{"java", "-Xmx512m", "-Djava.library.path=./libs with spaces", "-Dfile.encoding=UTF-8", "-jar", "myapp.jar", "--config", "my config.properties"},
-			expected: `java -Xmx512m "-Djava.library.path=./libs with spaces" -Dfile.encoding=UTF-8 -jar myapp.jar --config "my config.properties"`,
+			name: "complex JVM arguments",
+			input: []string{
+				"java", "-Xmx512m", "-Djava.library.path=./libs with spaces",
+				"-Dfile.encoding=UTF-8", "-jar", "myapp.jar", "--config", "my config.properties",
+			},
+			expected: `java -Xmx512m "-Djava.library.path=./libs with spaces" ` +
+				`-Dfile.encoding=UTF-8 -jar myapp.jar --config "my config.properties"`,
 		},
 		{
 			name:     "arguments with tabs",

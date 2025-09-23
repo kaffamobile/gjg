@@ -9,6 +9,8 @@ import (
 )
 
 func TestParseConfig(t *testing.T) {
+	const testJarFile = "test.jar"
+
 	tests := []struct {
 		name     string
 		input    string
@@ -36,7 +38,7 @@ env_TEST_VAR=test_value`,
 			wantErr: false,
 		},
 		{
-			name: "minimal config with defaults",
+			name:  "minimal config with defaults",
 			input: `jvm_args=-Xmx256m`,
 			expected: &Config{
 				JavaDir:        "",
@@ -93,8 +95,8 @@ app_args=--config "my config.properties" --verbose`,
 			wantErr:  true,
 		},
 		{
-			name:     "empty config",
-			input:    "",
+			name:  "empty config",
+			input: "",
 			expected: &Config{
 				JavaDir:        "",
 				JavaExecutable: "java",
@@ -112,12 +114,12 @@ app_args=--config "my config.properties" --verbose`,
 			// Create temporary config file
 			tmpDir := t.TempDir()
 			configPath := filepath.Join(tmpDir, "test.conf")
-			err := os.WriteFile(configPath, []byte(tt.input), 0644)
+			err := os.WriteFile(configPath, []byte(tt.input), 0600)
 			if err != nil {
 				t.Fatalf("Failed to write test config: %v", err)
 			}
 
-			got, err := Load(configPath, "test.jar")
+			got, err := Load(configPath, testJarFile)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Load() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -128,8 +130,8 @@ app_args=--config "my config.properties" --verbose`,
 			}
 
 			// Set default jar file based on config name if not set
-			if tt.expected.JarFile == "test.jar" {
-				tt.expected.JarFile = "test.jar"
+			if tt.expected.JarFile == testJarFile {
+				tt.expected.JarFile = testJarFile
 			}
 
 			if !reflect.DeepEqual(got, *tt.expected) {
