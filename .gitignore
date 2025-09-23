@@ -1,0 +1,99 @@
+# Binaries and executables
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Go build artifacts
+/bin/
+gjg-launcher*
+
+# Java build artifacts
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+*.zip
+
+# Java compilation artifacts
+target/
+build/
+.build/
+out/
+dist/
+
+# Test artifacts and stubs
+/testdata/jre/
+/testdata/java/*.jar
+/testdata/java/testdata/
+/testdata/java/manifest.txt
+
+# Example and wine test artifacts
+/examples/*/testdata/jre/
+/examples/*/*.exe
+/examples/*/*.jar
+/examples/*/*.conf
+/examples/*/.build/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Go module cache
+go.sum
+
+# Test coverage
+*.out
+coverage.html
+coverage.xml
+
+# Temporary files
+*.tmp
+*.temp
+/tmp/
+.cache/
+
+# Log files
+*.log
+
+# Operating system files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Wine testing artifacts
+.wine/
+wine_*
+
+# Version and build info (if generated)
+version.txt
+build.txt
+
+# Dependencies (if vendored)
+/vendor/
+
+# Local development files
+.env
+.env.local
+local.conf
+dev.conf
+test.conf
+
+# Documentation build artifacts
+/docs/_site/
+/docs/.jekyll-cache/
+
+# Backup files
+*.bak
+*.backup
+*~
