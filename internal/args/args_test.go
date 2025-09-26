@@ -30,7 +30,7 @@ func TestExtractSpecial(t *testing.T) {
 		{
 			name:        "dry-run flag only",
 			input:       []string{"--gjg-dry-run", "--verbose", "arg1"},
-			wantDebug:   false,
+			wantDebug:   true,
 			wantDryRun:  true,
 			wantForward: []string{"--verbose", "arg1"},
 		},

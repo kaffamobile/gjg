@@ -1,94 +1,92 @@
-//go:build windows
-
 package main
 
 import (
-    "fmt"
-    "os"
-    "path/filepath"
-
-    "gjg/internal/args"
-    "gjg/internal/config"
-    "gjg/internal/quote"
-    "gjg/internal/resolve"
-    "gjg/internal/runner"
+	"fmt"
+	"gjg/internal/args"
+	"gjg/internal/config"
+	"gjg/internal/runner"
+	"os"
+	"path/filepath"
+	"time"
 )
 
-const (
-    exitConfigError = 201
-    exitJavaMissing = 202
-    exitJarMissing  = 203
-)
+var version = "dev"
 
 func main() {
-    // Parse special flags from CLI
-    debug, dryRun, forwardArgs := args.ExtractSpecial(os.Args[1:])
+	debug, dryRun, forwardArgs := args.ExtractSpecial(os.Args[1:])
 
-    // Load configuration
-    cfg, confPath, err := config.LoadFromExe()
-    if err != nil {
-        fmt.Fprintln(os.Stderr, err.Error())
-        os.Exit(exitConfigError)
-    }
+	var logFile *os.File
+	if debug {
+		exe, err := os.Executable()
+		if err == nil {
+			logFile, _ = os.Create(filepath.Join(filepath.Dir(exe), "gjg-debug.log"))
+			if logFile != nil {
+				defer logFile.Close()
+			}
+			logf(logFile, "Starting Launcher on Version: %s", version)
+		}
+	}
 
-    // Resolve paths relative to exe dir
-    exePath, _ := os.Executable()
-    exeDir := filepath.Dir(exePath)
+	cfg, confPath, err := config.Load()
+	if err != nil {
+		logf(logFile, "Error loading config: %s", err)
+		os.Exit(1)
+	}
 
-    javaPath, err := resolve.ResolveJava(cfg.JavaDir, cfg.JavaExecutable, exeDir)
-    if err != nil {
-        fmt.Fprintln(os.Stderr, err.Error())
-        os.Exit(exitJavaMissing)
-    }
+	jvmTokens := args.Tokenize(cfg.JVMArgs)
+	appTokens := args.Tokenize(cfg.AppArgs)
 
-    jarPath, err := resolve.ResolveJar(cfg.JarFile, exeDir)
-    if err != nil {
-        fmt.Fprintln(os.Stderr, err.Error())
-        os.Exit(exitJarMissing)
-    }
+	argv := make([]string, 0, 4+len(jvmTokens)+len(appTokens)+len(forwardArgs))
+	argv = append(argv, cfg.JavaExecutableAbsolutePath)
+	argv = append(argv, jvmTokens...)
+	argv = append(argv, "-jar", cfg.JarFileAbsolutePath)
+	argv = append(argv, appTokens...)
+	argv = append(argv, forwardArgs...)
 
-    // Build final argument vector
-    jvmTokens := args.Tokenize(cfg.JVMArgs)
-    appTokens := args.Tokenize(cfg.AppArgs)
+	if debug {
+		logf(logFile, "Configuration loaded from: %s", confPath)
+		logf(logFile, "Java executable: %s", cfg.JavaExecutableAbsolutePath)
+		logf(logFile, "JAR file: %s", cfg.JarFileAbsolutePath)
+		logf(logFile, "Working directory: %s", filepath.Dir(confPath))
 
-    argv := make([]string, 0, 4+len(jvmTokens)+len(appTokens)+len(forwardArgs))
-    argv = append(argv, javaPath)
-    argv = append(argv, jvmTokens...)
-    argv = append(argv, "-jar", jarPath)
-    argv = append(argv, appTokens...)
-    argv = append(argv, forwardArgs...)
+		if cfg.JVMArgs != "" {
+			logf(logFile, "JVM arguments: %s", cfg.JVMArgs)
+		}
 
-    // Prepare env
-    env := config.MergeEnv(os.Environ(), cfg.Env)
+		if len(forwardArgs) > 0 {
+			logf(logFile, "Forward arguments: %v", forwardArgs)
+		}
 
-    // Debug and Dry-run
-    if debug {
-        fmt.Fprintf(os.Stdout, "[GJG] Configuration loaded from: %s\n", confPath)
-        fmt.Fprintf(os.Stdout, "[GJG] Java executable: %s\n", javaPath)
-        fmt.Fprintf(os.Stdout, "[GJG] JAR file: %s\n", jarPath)
-        if len(cfg.Env) > 0 {
-            fmt.Fprintf(os.Stdout, "[GJG] Environment variables: %s\n", config.EnvSummary(cfg.Env))
-        } else {
-            fmt.Fprintf(os.Stdout, "[GJG] Environment variables: (none)\n")
-        }
-        fmt.Fprintf(os.Stdout, "[GJG] Executing: %s\n", quote.JoinWindows(argv))
-    }
+		logf(logFile, "Executing: %v", argv)
+	}
 
-    if dryRun {
-        // Do not execute
-        return
-    }
+	if dryRun {
+		logf(logFile, "Dry-run mode - not executing")
+		os.Exit(0)
+	}
 
-    // Execute
-    code, err := runner.Run(argv, env, exeDir)
-    if err != nil {
-        // Best-effort: print error; if exit code was obtained, use it, else 1
-        fmt.Fprintln(os.Stderr, err.Error())
-        if code == 0 {
-            os.Exit(1)
-        }
-        os.Exit(code)
-    }
-    os.Exit(code)
+	workDir := filepath.Dir(confPath)
+	code, err := runner.Run(argv, cfg.Env, workDir)
+	if err != nil {
+		logf(logFile, "ERROR: Execution failed: %v", err)
+		if code == 0 {
+			os.Exit(1)
+		}
+		os.Exit(code)
+	}
+
+	if debug && code != 0 {
+		logf(logFile, "Process exited with code: %d", code)
+	}
+
+	os.Exit(code)
 }
 
+func logf(logFile *os.File, format string, args ...interface{}) {
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	msg := fmt.Sprintf("[%s] [GJG] "+format, append([]interface{}{timestamp}, args...)...)
+	if logFile != nil {
+		_, _ = logFile.WriteString(msg + "\n")
+	}
+	fmt.Println(msg)
+}
