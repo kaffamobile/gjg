@@ -7,6 +7,7 @@ import (
 	"gjg/internal/runner"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -17,16 +18,18 @@ func main() {
 
 	var logFile *os.File
 	if debug {
-		exe, err := os.Executable()
+		userConfigDir, err := os.UserCacheDir()
 		if err == nil {
-			logFile, _ = os.Create(filepath.Join(filepath.Dir(exe), "gjg-debug.log"))
+			logFilePath := filepath.Join(userConfigDir, "gjg", getExeName(), "gjg-debug.log")
+			_ = os.MkdirAll(filepath.Dir(logFilePath), 0755)
+			logFile, _ = os.Create(logFilePath)
 			if logFile != nil {
 				defer logFile.Close()
 			}
-			logf(logFile, "Starting Launcher on Version: %s", version)
 		}
 	}
 
+	logf(logFile, "Starting Launcher on Version: %s", version)
 	cfg, confPath, err := config.Load()
 	if err != nil {
 		logf(logFile, "Error loading config: %s", err)
@@ -89,4 +92,15 @@ func logf(logFile *os.File, format string, args ...interface{}) {
 		_, _ = logFile.WriteString(msg + "\n")
 	}
 	fmt.Println(msg)
+}
+
+func getExeName() string {
+	exePath, err := os.Executable()
+	if err != nil {
+		return "gjg"
+	}
+	exeName := filepath.Base(exePath)
+	exeNameNoExt := strings.TrimSuffix(exeName, filepath.Ext(exeName))
+
+	return exeNameNoExt
 }
