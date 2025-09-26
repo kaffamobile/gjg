@@ -1,4 +1,8 @@
 # GJG Launcher
+[![Go Version](https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go)](https://go.dev)
+[![Release](https://img.shields.io/github/v/release/kaffamobile/gjg?include_prereleases)](https://github.com/kaffamobile/gjg/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![CI](https://github.com/kaffamobile/gjg/actions/workflows/ci.yml/badge.svg)](https://github.com/kaffamobile/gjg/actions)
 
 **GJG Launcher** is a lightweight Go-based executable wrapper designed to replace [Launch4j](https://launch4j.sourceforge.net/) for running Java/Kotlin applications on Windows.  
 It was created at **Kaffa** to solve issues where Launch4j crashes at native level when handling `JAVA_OPTS` or arguments containing special characters such as quotes.
