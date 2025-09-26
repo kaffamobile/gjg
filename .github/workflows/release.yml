@@ -1,0 +1,102 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  GO_VERSION: '1.25.1'
+
+jobs:
+  create-release:
+    name: Create Release and Build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Necessário para criar releases
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Necessário para changelog
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install Mage
+        run: |
+          git clone https://github.com/magefile/mage
+          cd mage
+          go run bootstrap.go
+          cd ..
+          rm -rf mage
+
+      - name: Get version
+        id: get_version
+        run: |
+          # Remove 'refs/tags/' do início
+          VERSION="${GITHUB_REF#refs/tags/}"
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Tag version: $VERSION"
+
+      - name: Build all binaries
+        run: |
+          VERSION=${{ steps.get_version.outputs.VERSION }} mage build
+
+      - name: Generate checksums
+        run: |
+          cd bin
+          sha256sum *.exe > checksums.txt
+          cat checksums.txt
+
+      - name: Create Release Notes
+        id: release_notes
+        run: |
+          cat << EOF > release_notes.md
+          ## 📦 GJG Launcher ${{ steps.get_version.outputs.VERSION }}
+          
+          ### 📥 Downloads
+          
+          | Platform | File | Size |
+          |----------|------|------|
+          | Windows 64-bit | [gjg-launcher-windows-amd64.exe](../../releases/download/${{ steps.get_version.outputs.VERSION }}/gjg-launcher-windows-amd64.exe) | ~2.0 MB |
+          | Windows 32-bit | [gjg-launcher-windows-386.exe](../../releases/download/${{ steps.get_version.outputs.VERSION }}/gjg-launcher-windows-386.exe) | ~1.9 MB |
+          | Windows ARM64 | [gjg-launcher-windows-arm64.exe](../../releases/download/${{ steps.get_version.outputs.VERSION }}/gjg-launcher-windows-arm64.exe) | ~1.9 MB |
+          
+          ### 🔐 SHA256 Checksums
+          \`\`\`
+          $(cat bin/checksums.txt)
+          \`\`\`
+          
+          ### 📝 What's Changed
+          
+          EOF
+          
+          # Adiciona commits desde última tag
+          if git describe --tags --abbrev=0 HEAD^ 2>/dev/null; then
+            LAST_TAG=$(git describe --tags --abbrev=0 HEAD^)
+            git log --pretty=format:"- %s (%h)" $LAST_TAG..HEAD >> release_notes.md
+          else
+            git log --pretty=format:"- %s (%h)" --max-count=20 >> release_notes.md
+          fi
+          
+          echo "" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "**Full Changelog**: https://github.com/${{ github.repository }}/commits/${{ steps.get_version.outputs.VERSION }}" >> release_notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.get_version.outputs.VERSION }}
+          name: Release ${{ steps.get_version.outputs.VERSION }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ contains(steps.get_version.outputs.VERSION, '-beta') || contains(steps.get_version.outputs.VERSION, '-rc') }}
+          files: |
+            bin/gjg-launcher-windows-amd64.exe
+            bin/gjg-launcher-windows-386.exe
+            bin/gjg-launcher-windows-arm64.exe
+            bin/checksums.txt

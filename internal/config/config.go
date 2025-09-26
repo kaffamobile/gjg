@@ -1,139 +1,202 @@
 package config
 
 import (
-    "bufio"
-    "errors"
-    "fmt"
-    "os"
-    "path/filepath"
-    "strings"
+	"bufio"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
 )
 
 type Config struct {
-    JavaDir        string
-    JavaExecutable string
-    JarFile        string
-    JVMArgs        string
-    AppArgs        string
-    Env            map[string]string
+	JavaExecutableAbsolutePath string
+	JarFileAbsolutePath        string
+	JVMArgs                    string
+	AppArgs                    string
+	Env                        []string
 }
 
-// LoadFromExe locates the .conf file next to the executable and loads it.
-func LoadFromExe() (Config, string, error) {
-    exe, err := os.Executable()
-    if err != nil {
-        return Config{}, "", fmt.Errorf("failed to get executable path: %w", err)
-    }
-    base := strings.TrimSuffix(exe, filepath.Ext(exe))
-    confPath := base + ".conf"
-    cfg, err := Load(confPath, filepath.Base(base)+".jar")
-    if err != nil {
-        return Config{}, "", err
-    }
-    return cfg, confPath, nil
+func Load() (*Config, string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to get executable path: %w", err)
+	}
+
+	exeBase := strings.TrimSuffix(filepath.Base(exe), filepath.Ext(exe))
+	exeDir := filepath.Dir(exe)
+	searchPaths := []string{
+		filepath.Join(exeDir, exeBase+".gjg.conf"),
+		filepath.Join(".", exeBase+".gjg.conf"),
+		filepath.Join(exeDir, "example.gjg.conf"),
+		filepath.Join(".", "example.gjg.conf"),
+	}
+
+	var confFilePath string
+	for _, path := range searchPaths {
+		if _, err := os.Stat(path); err == nil {
+			confFilePath = path
+			break
+		}
+	}
+	if confFilePath == "" {
+		return nil, "", fmt.Errorf("configuration file not found. Searched for: %v", searchPaths)
+	}
+	confFilePath, err = filepath.Abs(confFilePath)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to get absolute path of configuration file: %w", err)
+	}
+
+	cfg, err := buildConfig(confFilePath)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return cfg, confFilePath, nil
 }
 
-// Load parses a .conf file at the given path. defaultJar is used when jar_file not specified.
-func Load(path string, defaultJar string) (Config, error) {
-    f, err := os.Open(path)
-    if err != nil {
-        return Config{}, fmt.Errorf("configuration file error: %w", err)
-    }
-    defer f.Close()
+func buildConfig(configFilePath string) (*Config, error) {
+	f, err := os.Open(configFilePath)
+	if err != nil {
+		return nil, fmt.Errorf("configuration file error: %w", err)
+	}
+	defer f.Close()
 
-    cfg := Config{
-        JavaExecutable: "java",
-        JarFile:        defaultJar,
-        Env:            map[string]string{},
-    }
+	cfg := &Config{
+		Env: os.Environ(),
+	}
 
-    scanner := bufio.NewScanner(f)
-    lineNo := 0
-    for scanner.Scan() {
-        lineNo++
-        line := scanner.Text()
-        line = strings.TrimSpace(line)
-        if line == "" || strings.HasPrefix(line, "#") {
-            continue
-        }
-        eq := strings.IndexRune(line, '=')
-        if eq <= 0 { // key cannot be empty
-            return Config{}, fmt.Errorf("invalid config line %d: %q", lineNo, line)
-        }
-        key := strings.TrimSpace(line[:eq])
-        val := strings.TrimSpace(line[eq+1:])
+	var javaDir string
+	var jarFile string
+	envOverrides := make(map[string]string)
 
-        if strings.HasPrefix(key, "env_") {
-            envKey := strings.TrimPrefix(key, "env_")
-            if envKey == "" {
-                return Config{}, fmt.Errorf("invalid env_ key at line %d", lineNo)
-            }
-            cfg.Env[envKey] = val
-            continue
-        }
+	scanner := bufio.NewScanner(f)
+	lineNo := 0
+	for scanner.Scan() {
+		lineNo++
+		line := scanner.Text()
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
 
-        switch key {
-        case "java_dir":
-            cfg.JavaDir = val
-        case "java_executable":
-            cfg.JavaExecutable = val
-        case "jar_file":
-            cfg.JarFile = val
-        case "jvm_args":
-            cfg.JVMArgs = val
-        case "app_args":
-            cfg.AppArgs = val
-        default:
-            return Config{}, fmt.Errorf("unknown config key %q at line %d", key, lineNo)
-        }
-    }
-    if err := scanner.Err(); err != nil {
-        return Config{}, fmt.Errorf("error reading config: %w", err)
-    }
+		eq := strings.IndexRune(line, '=')
+		if eq <= 0 {
+			return nil, fmt.Errorf("invalid config line %d: %q", lineNo, line)
+		}
+		key := strings.TrimSpace(line[:eq])
+		val := strings.TrimSpace(line[eq+1:])
 
-    return cfg, nil
+		switch {
+		case strings.HasPrefix(key, "env_"):
+			envKey := strings.TrimPrefix(key, "env_")
+			if envKey == "" {
+				return nil, fmt.Errorf("invalid env_ key at line %d", lineNo)
+			}
+			envOverrides[envKey] = val
+		case key == "java_dir":
+			javaDir = val
+		case key == "jar_file":
+			jarFile = val
+		case key == "jvm_args":
+			cfg.JVMArgs = val
+		case key == "app_args":
+			cfg.AppArgs = val
+		default:
+			return nil, fmt.Errorf("unknown config key %q at line %d", key, lineNo)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error reading config: %w", err)
+	}
+
+	if jarFile == "" {
+		exeBase := strings.TrimSuffix(filepath.Base(configFilePath), ".gjg.conf")
+		jarFile = exeBase + ".jar"
+	}
+
+	configDir := filepath.Dir(configFilePath)
+	javaPath, err := resolveJava(javaDir, configDir)
+	if err != nil {
+		return nil, fmt.Errorf("java resolution failed: %w", err)
+	}
+	cfg.JavaExecutableAbsolutePath = javaPath
+
+	jarPath, err := resolveJar(jarFile, configDir)
+	if err != nil {
+		return nil, fmt.Errorf("jar resolution failed: %w", err)
+	}
+	cfg.JarFileAbsolutePath = jarPath
+	cfg.Env = mergeEnv(cfg.Env, envOverrides)
+
+	return cfg, nil
 }
 
-// MergeEnv overlays overrides onto base environment in KEY=VAL form.
-func MergeEnv(base []string, overrides map[string]string) []string {
-    out := make([]string, 0, len(base)+len(overrides))
-    keys := map[string]int{}
-    for i, kv := range base {
-        eq := strings.IndexRune(kv, '=')
-        if eq <= 0 {
-            continue
-        }
-        k := kv[:eq]
-        keys[strings.ToUpper(k)] = i
-        out = append(out, kv)
-    }
-    for k, v := range overrides {
-        key := strings.ToUpper(k)
-        kv := k + "=" + v
-        if idx, ok := keys[key]; ok {
-            out[idx] = kv
-        } else {
-            out = append(out, kv)
-        }
-    }
-    return out
+func mergeEnv(base []string, overrides map[string]string) []string {
+	result := make([]string, 0, len(base)+len(overrides))
+	seen := make(map[string]bool)
+
+	for _, env := range base {
+		parts := strings.SplitN(env, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.ToUpper(parts[0])
+		if newVal, ok := overrides[parts[0]]; ok {
+			result = append(result, parts[0]+"="+newVal)
+			seen[key] = true
+		} else {
+			result = append(result, env)
+		}
+	}
+	for k, v := range overrides {
+		if !seen[strings.ToUpper(k)] {
+			result = append(result, k+"="+v)
+		}
+	}
+
+	return result
 }
 
-// EnvSummary formats environment overrides as "K=V, K2=V2" for debug.
-func EnvSummary(env map[string]string) string {
-    if len(env) == 0 {
-        return ""
-    }
-    parts := make([]string, 0, len(env))
-    for k, v := range env {
-        parts = append(parts, fmt.Sprintf("%s=%s", k, v))
-    }
-    // Stable-ish order not guaranteed; this is acceptable for debugging purposes.
-    return strings.Join(parts, ", ")
+func resolveJava(javaDir, configDir string) (string, error) {
+	exeName := "javaw.exe"
+	if runtime.GOOS != "windows" {
+		exeName = "java"
+	}
+
+	if strings.TrimSpace(javaDir) == "" {
+		if p, err := exec.LookPath(exeName); err == nil {
+			return filepath.Abs(p)
+		}
+		return "", fmt.Errorf("java executable not found in PATH and not set on conf file")
+	}
+
+	base := javaDir
+	if !filepath.IsAbs(base) {
+		base = filepath.Join(configDir, base)
+	}
+
+	javaPath := filepath.Join(base, "bin", exeName)
+	if _, err := os.Stat(javaPath); err != nil {
+		return "", fmt.Errorf("java executable not found: %s", javaPath)
+	}
+
+	return filepath.Abs(javaPath)
 }
 
-// Helpers for explicit error kinds
-var (
-    ErrConfig = errors.New("config error")
-)
-
+func resolveJar(jar, configDir string) (string, error) {
+	p := jar
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(configDir, p)
+	}
+	info, err := os.Stat(p)
+	if err != nil {
+		return "", fmt.Errorf("jar file not found: %s", p)
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("jar path is a directory: %s", p)
+	}
+	return filepath.Abs(p)
+}
