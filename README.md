@@ -129,6 +129,71 @@ mage test    # Run tests
 mage clean   # Clean artifacts
 ```
 
+## 🔌 Maven Plugin
+
+For Maven users, we provide an official plugin that automates the entire packaging process:
+
+**[GJG Maven Plugin](https://github.com/kaffamobile/gjg-maven-plugin)** - Package your Java applications with GJG directly from Maven.
+
+### Quick Setup
+
+Add to your `pom.xml`:
+```xml
+<plugin>
+    <groupId>io.github.kaffamobile.tools.maven</groupId>
+    <artifactId>gjg-maven-plugin</artifactId>
+    <version>1.0.0</version>
+    <executions>
+        <execution>
+            <phase>package</phase>
+            <goals>
+                <goal>package</goal>
+            </goals>
+        </execution>
+    </executions>
+    <configuration>
+        <!-- Output executable -->
+        <outputFile>${project.build.directory}/${project.artifactId}.exe</outputFile>
+        
+        <!-- JAR configuration -->
+        <jarFile>./${project.artifactId}.jar</jarFile>
+        
+        <!-- Java runtime -->
+        <javaDir>./runtime/jre-17</javaDir>
+        
+        <!-- Architecture: amd64, 386, or arm64 -->
+        <arch>amd64</arch>
+        
+        <!-- JVM arguments -->
+        <jvmArgs>
+            <arg>-Xms256m</arg>
+            <arg>-Xmx2048m</arg>
+            <arg>-Dfile.encoding=UTF-8</arg>
+            <arg>-Djava.library.path=./libs</arg>
+        </jvmArgs>
+        
+        <!-- Application arguments -->
+        <appArgs>
+            <arg>--server.port=8080</arg>
+            <arg>--profile=production</arg>
+        </appArgs>
+        
+        <!-- Environment variables -->
+        <env>
+            <APP_HOME>C:\MyApp</APP_HOME>
+            <LOG_LEVEL>INFO</LOG_LEVEL>
+        </env>
+        
+        <!-- Windows metadata -->
+        <icon>src/main/resources/app.ico</icon>
+        <fileDescription>My Application</fileDescription>
+        <productName>MyApp Professional</productName>
+        <productVersion>1.0.0.0</productVersion>
+        <companyName>My Company Ltd.</companyName>
+        <copyright>© 2024 My Company Ltd.</copyright>
+    </configuration>
+</plugin>
+```
 
 ## 📄 License
 
